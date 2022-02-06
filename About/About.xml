@@ -19,6 +19,6 @@
   <loadAfter>
     <li>brrainz.harmony</li>
   </loadAfter>
-  <description>Display summary of grazing nutrition in the pen.</description>
+  <description>Frustrated with animal starving? This is a QoL mod that displays summary of grazing nutrition in the pen. It provides an option to make player tamed animals eat Dandelion only if it is mature (Default off).</description>
 </ModMetaData>
 

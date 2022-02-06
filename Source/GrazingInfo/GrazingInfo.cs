@@ -14,18 +14,44 @@ using System.Reflection;
 
 namespace CF_GrazingInfo
 {
-    [StaticConstructorOnStartup]
-    public static class Patcher
+    public class Patcher: Mod
     {
-        static Patcher()
+        public static Settings Settings = new();
+
+        public Patcher(ModContentPack pack): base(pack)
         {
+            Settings = GetSettings<Settings>();
             DoPatching();
         }
+        public override string SettingsCategory()
+        {
+            return "Grazing Info";
+        }
 
-        public static void DoPatching()
+        public override void DoSettingsWindowContents(Rect inRect)
+        {
+            Listing_Standard listingStandard = new();
+            listingStandard.Begin(inRect);
+            listingStandard.CheckboxLabeled("Eat Dandelion Only If Mature", ref Settings.EatDandelionOnlyIfMature, "Player tamed animals eat Dandelion only if it is mature");
+            listingStandard.End();
+            base.DoSettingsWindowContents(inRect);
+        }
+
+        public void DoPatching()
         {
             var harmony = new Harmony("com.colinfang.GrazingInfo");
             harmony.PatchAll();
+        }
+    }
+
+    public class Settings: ModSettings
+    {
+        public bool EatDandelionOnlyIfMature;
+
+        public override void ExposeData()
+        {
+            Scribe_Values.Look(ref EatDandelionOnlyIfMature, "EatDandelionOnlyIfMature", false);
+            base.ExposeData();
         }
     }
 
@@ -210,4 +236,41 @@ namespace CF_GrazingInfo
                 .ToString();
         }
     }
+
+
+    [HarmonyPatch(typeof(FoodUtility))]
+    [HarmonyPatch(nameof(FoodUtility.WillEat))]
+    [HarmonyPatch(new Type[] { typeof(Pawn), typeof(Thing), typeof(Pawn), typeof(bool) })]
+    public static class PatchFoodUtilityWillEat
+    {
+        public static void Postfix(this Pawn p, Thing food, ref bool __result)
+        {
+            if (__result == false)
+            {
+                return;
+            }
+
+            if (!(p.RaceProps.Animal && (p.Faction?.IsPlayer ?? false)))
+            {
+                return;
+            }
+
+            if (food is not Plant plant)
+            {
+                return;
+            }
+
+            if (plant.def.defName == "Plant_Dandelion" && Patcher.Settings.EatDandelionOnlyIfMature)
+            {
+                if (plant.LifeStage != PlantLifeStage.Mature)
+                {
+                    __result = false;
+                }
+            }
+        }
+    }
+
+
+    }
+
 }

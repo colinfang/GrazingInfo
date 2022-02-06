@@ -1,10 +1,15 @@
 # Grazing Info for RimWorld
 
-
-This is a QoL mod that displays summary of grazing nutrition in the pen.
+Frustrated with animal starving? This is a QoL mod that displays summary of grazing nutrition in the pen. It provides an option to make player tamed animals eat Dandelion only if it is mature (Default off).
 
 [<img src="https://i.imgur.com/N8E4pyP.png" height="50">](https://steamcommunity.com/workshop/filedetails/?id=2729671309)
 
+
+## Features
+
+- It provides an option to make player tamed animals eat Dandelion only if it is mature (Default off).
+    - No longer need to manually rotate animals to different pens, in order to maximize nutrition from Dandelion growing zone.
+    - For player tamed animals only. Wild animals are not affected.
 
 ## Remarks
 
