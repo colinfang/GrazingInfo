@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -34,19 +34,22 @@ namespace CF_GrazingInfo
     {
         public class Info
         {
-            public float Nutrition;
+            public float NutritionIngestible;
+            public float NutritionGrown;
             public int Count;
         }
 
         public static Dictionary<ThingDef, Info> Summary = new();
         public static Dictionary<ThingDef, bool> edibleCache = new();
-        public static float TotalNutrition;
+        public static float TotalNutritionIngestible;
+        public static float TotalNutritionGrown;
         public static string? CachedTooltip;
         public static string? CachedGrazingEmptyDays;
         public static void Reset()
         {
             Summary.Clear();
-            TotalNutrition = 0;
+            TotalNutritionIngestible = 0;
+            TotalNutritionGrown = 0;
             CachedTooltip = null;
             CachedGrazingEmptyDays = null;
         }
@@ -66,24 +69,22 @@ namespace CF_GrazingInfo
                     {
                         continue;
                     }
-                    float nutritionAvailable = 0;
-                    if (plant.IngestibleNow)
-                    {
-                        float nutrition = plant.GetStatValue(StatDefOf.Nutrition);
-                        nutritionAvailable = plant.Growth * nutrition;
-                    }
+                    float nutritionAvailable = plant.Growth * plant.GetStatValue(StatDefOf.Nutrition);
+                    float nutritionIngestible = plant.IngestibleNow ? nutritionAvailable : 0;
 
-                    TotalNutrition += nutritionAvailable;
+                    TotalNutritionGrown += nutritionAvailable;
+                    TotalNutritionIngestible += nutritionIngestible;
+
                     if (Summary.TryGetValue(plant.def, out var info))
                     {
-                        info.Nutrition += nutritionAvailable;
+                        info.NutritionGrown += nutritionAvailable;
+                        info.NutritionIngestible += nutritionIngestible;
                         info.Count += 1;
                     }
                     else
                     {
-                        Summary.Add(plant.def, new Info { Nutrition = nutritionAvailable, Count = 1 });
+                        Summary.Add(plant.def, new Info { NutritionGrown = nutritionAvailable, NutritionIngestible = nutritionIngestible, Count = 1 });
                     }
-
                 }
             }
         }
@@ -94,7 +95,7 @@ namespace CF_GrazingInfo
                 float consumptionPerDay = calc.SumNutritionConsumptionPerDay - calc.NutritionPerDayToday;
                 if (consumptionPerDay > 0)
                 {
-                    float d = TotalNutrition / consumptionPerDay;
+                    float d = TotalNutritionIngestible / consumptionPerDay;
                     if (d < 999) {
                         CachedGrazingEmptyDays = d.ToString("F1");
                     } else {
@@ -122,7 +123,8 @@ namespace CF_GrazingInfo
 
                 foreach (var kv in Summary)
                 {
-                    if (kv.Value.Nutrition < 0.01)
+                    var info = kv.Value;
+                    if (info.NutritionGrown < 0.1)
                     {
                         continue;
                     }
@@ -131,9 +133,9 @@ namespace CF_GrazingInfo
                         .Append("- ")
                         .Append(kv.Key.LabelCap)
                         .Append(" x")
-                        .Append(kv.Value.Count)
+                        .Append(info.Count)
                         .Append(": ")
-                        .AppendLine(kv.Value.Nutrition.ToString("F1"));
+                        .AppendLine($"{info.NutritionIngestible:F1} ({info.NutritionGrown:F1})");
                 }
                 CachedTooltip = stringBuilder.ToString();
             }
@@ -175,7 +177,7 @@ namespace CF_GrazingInfo
         {
             var arg = new object?[] {
                 "GrazingInfo_Total".Translate().ToString(),
-                PenFoodCalc.TotalNutrition.ToString("F1"),
+                $"{PenFoodCalc.TotalNutritionIngestible:F1} ({PenFoodCalc.TotalNutritionGrown:F1})",
                 curY, width,
                 () => PenFoodCalc.ToolTip(),
                 null
@@ -201,7 +203,7 @@ namespace CF_GrazingInfo
                 .AppendLine()
                 .Append("GrazingInfo_Total".Translate())
                 .Append(": ")
-                .AppendLine(PenFoodCalc.TotalNutrition.ToString("F1"))
+                .AppendLine($"{PenFoodCalc.TotalNutritionIngestible:F1} ({PenFoodCalc.TotalNutritionGrown:F1})")
                 .Append("GrazingInfo_EmptyDays".Translate())
                 .Append(": ")
                 .Append(PenFoodCalc.GetGrazingEmptyDays(calc))

@@ -2,7 +2,7 @@
 <LanguageData>
 
 <GrazingInfo_Total>牧场营养值</GrazingInfo_Total>
-<GrazingInfo_TotalDescription>畜栏内可食用的牧场营养值总和。</GrazingInfo_TotalDescription>
+<GrazingInfo_TotalDescription>畜栏内目前可食用（总共）的牧场营养值总和。</GrazingInfo_TotalDescription>
 <GrazingInfo_EmptyDays>牧场草料耗尽天数</GrazingInfo_EmptyDays>
 <GrazingInfo_EmptyDaysDescription>牧场草料耗尽估计天数。[currentGrazingNutrition / (consumption - growth)]</GrazingInfo_EmptyDaysDescription>
 
