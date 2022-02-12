@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -14,11 +14,11 @@ using System.Reflection;
 
 namespace CF_GrazingInfo
 {
-    public class Patcher: Mod
+    public class Patcher : Mod
     {
         public static Settings Settings = new();
 
-        public Patcher(ModContentPack pack): base(pack)
+        public Patcher(ModContentPack pack) : base(pack)
         {
             Settings = GetSettings<Settings>();
             DoPatching();
@@ -33,7 +33,8 @@ namespace CF_GrazingInfo
             Listing_Standard listingStandard = new();
             listingStandard.Begin(inRect);
             listingStandard.CheckboxLabeled("Eat Dandelion Only If Mature", ref Settings.EatDandelionOnlyIfMature, "Player tamed animals eat Dandelion only if it is mature");
-            listingStandard.CheckboxLabeled("Floating text when grazing", ref Settings.FloatingTextWhenGrazing, "Show nutrition consumed & food saturation increased as a floating text when animals graze");
+            listingStandard.CheckboxLabeled("Floating Text When Grazing", ref Settings.FloatingTextWhenGrazing, "Show nutrition consumed & food saturation increased as a floating text when animals graze");
+            listingStandard.CheckboxLabeled("Animal Productivity Info", ref Settings.AnimalProductivityInfo, "Show more stats on animal info card e.g. best male to female ratio, nutrition efficiency");
             listingStandard.End();
             base.DoSettingsWindowContents(inRect);
         }
@@ -45,15 +46,17 @@ namespace CF_GrazingInfo
         }
     }
 
-    public class Settings: ModSettings
+    public class Settings : ModSettings
     {
         public bool EatDandelionOnlyIfMature;
         public bool FloatingTextWhenGrazing;
+        public bool AnimalProductivityInfo;
 
         public override void ExposeData()
         {
             Scribe_Values.Look(ref EatDandelionOnlyIfMature, "EatDandelionOnlyIfMature", false);
             Scribe_Values.Look(ref FloatingTextWhenGrazing, "FloatingTextWhenGrazing", true);
+            Scribe_Values.Look(ref AnimalProductivityInfo, "AnimalProductivityInfo", true);
             base.ExposeData();
         }
     }
@@ -125,9 +128,12 @@ namespace CF_GrazingInfo
                 if (consumptionPerDay > 0)
                 {
                     float d = TotalNutritionIngestible / consumptionPerDay;
-                    if (d < 999) {
+                    if (d < 999)
+                    {
                         CachedGrazingEmptyDays = d.ToString("F1");
-                    } else {
+                    }
+                    else
+                    {
                         // Do not display very big exhaustion days
                         CachedGrazingEmptyDays = "∞";
                     }
@@ -284,11 +290,228 @@ namespace CF_GrazingInfo
             {
                 float foodLevel = ingester.needs.food.CurLevel;
                 float maxLevel = ingester.needs.food.MaxLevel;
+                float currentLevel = foodLevel + __result;
                 // No need to show max level if it is full.
-                var maxLeveltext = (maxLevel - foodLevel) < 0.001 ? "" : $" ({maxLevel:F2})";
-                MoteMaker.ThrowText(ingester.DrawPos, ingester.Map, $"Graze {__instance.Label} {__result:F2}: {foodLevel:F2} => {foodLevel + __result:F2}{maxLeveltext}", 4);
+                var maxLeveltext = (maxLevel - currentLevel) < 0.01 ? "" : $" ({maxLevel:F2})";
+                MoteMaker.ThrowText(ingester.DrawPos, ingester.Map, $"Graze {__instance.Label} {__result:F2}: {foodLevel:F2} => {currentLevel:F2}{maxLeveltext}", 4);
             }
         }
     }
 
+
+    [HarmonyPatch(typeof(Pawn))]
+    [HarmonyPatch(nameof(Pawn.SpecialDisplayStats))]
+    public static class PatchPawnSpecialDisplayStats
+    {
+        public static double HoursAwakenPerDay = 2.0 / 3;
+        public static double NumAdultsPerGestation(double numMates) => 1 + 1 / numMates;
+        public static double BaseHuntryPerDay(ThingDef pawnDef) => Need_Food.BaseFoodFallPerTickAssumingCategory(HungerCategory.Fed, pawnDef.race.baseHungerRate) * GenDate.TicksPerDay;
+        public static void Postfix(ref IEnumerable<StatDrawEntry> __result, Pawn __instance)
+        {
+            if (Patcher.Settings.AnimalProductivityInfo && __instance.RaceProps.Animal)
+            {
+                __result = __result.Concat(Stats(__instance));
+            }
+        }
+
+        public static IEnumerable<StatDrawEntry> Stats(Pawn pawn)
+        {
+            {
+                var (value, explain) = MateInfo(pawn.def);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Max females per male", value, explain, 10050);
+            }
+            var ageTracker = pawn.ageTracker;
+            if (!ageTracker.Adult)
+            {
+                var (value, explain) = MeatPerConsumptionOnGrowthNow(pawn);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Growth efficiency now", value, explain, 10040);
+            }
+            {
+                var (value, explain) = MeatPerConsumptionOnGrowth(pawn);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Growth efficiency", value, explain, 10030);
+            }
+            {
+                var (value, explain) = MeatPerConsumption(pawn);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Meat per consumption", value, explain, 10020);
+            }
+            {
+                var (value, explain) = BabyPerConsumption(pawn.def);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Baby meat per consumption", value, explain, 10015);
+            }
+            if (pawn.def.GetCompProperties<CompProperties_EggLayer>() is { } eggLayer)
+            {
+                var (value, explain) = EggPerConsumption(pawn.def, eggLayer);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Egg per consumption", value, explain, 10010);
+            }
+
+            if ((pawn.def.GetCompProperties<CompProperties_Milkable>() is { } milkable) && milkable.milkDef.ingestible is not null)
+            {
+                var (value, explain) = MilkPerConsumption(pawn.def, milkable);
+                yield return new StatDrawEntry(StatCategoryDefOf.AnimalProductivity, "Milk per consumption", value, explain, 10005);
+            }
+        }
+
+        public static float GetHungerRate(Pawn pawn, LifeStageDef lifeStageDef)
+        {
+            return lifeStageDef.hungerRateFactor * pawn.RaceProps.baseHungerRate;
+        }
+
+        public static float GetMeat(ThingDef pawnDef, LifeStageDef lifeStageDef)
+        {
+            float meat = StatDefOf.MeatAmount.Worker.GetBaseValueFor(StatRequest.For(pawnDef, null));
+            meat *= lifeStageDef.bodySizeFactor * pawnDef.race.baseBodySize;
+            return StatDefOf.MeatAmount.postProcessCurve.Evaluate(meat);
+        }
+
+        public static double GetConsumption(Pawn pawn, bool fromNow)
+        {
+            int startLifeStageIndex = fromNow ? pawn.ageTracker.CurLifeStageIndex : 0;
+            long startAgeTick = fromNow ? pawn.ageTracker.AgeBiologicalTicks : 0;
+
+            double nutritionConsumptionTillAdult = 0;
+            long currentAgeTick = startAgeTick;
+            var lifeStages = pawn.RaceProps.lifeStageAges;
+
+            for (var nextIdx = startLifeStageIndex + 1; nextIdx < lifeStages.Count; nextIdx += 1)
+            {
+                long nextAgeTick = (long)(lifeStages[nextIdx].minAge * GenDate.TicksPerYear);
+                long ticksToNextStage = nextAgeTick - currentAgeTick;
+                currentAgeTick = nextAgeTick;
+                var currentLifeStage = lifeStages[nextIdx - 1];
+                nutritionConsumptionTillAdult += Need_Food.BaseFoodFallPerTickAssumingCategory(HungerCategory.Fed, pawn.RaceProps.baseHungerRate) * currentLifeStage.def.hungerRateFactor * ticksToNextStage;
+            }
+            return nutritionConsumptionTillAdult;
+        }
+
+        public static (string value, string explain) MeatPerConsumptionRaw(Pawn pawn, bool fromNow, double extraNutritionConsumption = 0)
+        {
+            float currentMeat = fromNow ? GetMeat(pawn.def, pawn.ageTracker.CurLifeStage) : 0;
+            {
+                // debug
+                var meat_original = pawn.GetStatValue(StatDefOf.MeatAmount);
+                var meat_mine = GetMeat(pawn.def, pawn.ageTracker.CurLifeStage);
+                if (Math.Abs(meat_original - meat_mine) > 0.001)
+                {
+                    Log.Message($"Meat_original {meat_original}, meat_mine {meat_mine}");
+                }
+
+            }
+            double nutritionConsumptionTillAdult = GetConsumption(pawn, fromNow);
+
+            double meat = pawn.def.GetStatValueAbstract(StatDefOf.MeatAmount) - currentMeat;
+            double nutritionFromMeat = meat * pawn.RaceProps.meatDef.ingestible.CachedNutrition;
+            double totalNutritionConsumption = nutritionConsumptionTillAdult + extraNutritionConsumption;
+            var value = $"{nutritionFromMeat / totalNutritionConsumption * 100:F1}%";
+            StringBuilder sb = new();
+            sb
+                .AppendLine($"Nutrition efficiency: {nutritionFromMeat:F2} / {totalNutritionConsumption:F2} = {value}")
+                .AppendLine()
+                .AppendLine($"Meat till adult: {nutritionFromMeat:F2} nutrition")
+                .AppendLine($"Consumption till adult: {nutritionConsumptionTillAdult:F2} nutrition");
+            return (value, sb.ToString().TrimEndNewlines());
+        }
+
+        public static (string value, string explain) MeatPerConsumptionOnGrowthNow(Pawn pawn)
+        {
+            var (value, explain) = MeatPerConsumptionRaw(pawn, true);
+            explain = "The extra nutrition from meat if the animal is raised from the current age till adulthood, compared to the food eaten.\n\n" + explain;
+            return (value, explain);
+        }
+        public static (string value, string explain) MeatPerConsumptionOnGrowth(Pawn pawn)
+        {
+            var (value, explain) = MeatPerConsumptionRaw(pawn, false);
+            explain = "The nutrition from meat if the animal is raised from birth till adulthood, compared to the food eaten.\n\n" + explain;
+            return (value, explain);
+        }
+        public static (string value, string explain) MeatPerConsumption(Pawn pawn)
+        {
+            double gestationDays = AnimalProductionUtility.GestationDaysLitter(pawn.def);
+            var litterSize = AnimalProductionUtility.OffspringRange(pawn.def);
+            double nutritionInGestation = BaseHuntryPerDay(pawn.def) * gestationDays / litterSize.Average;
+            double numAdults = NumAdultsPerGestation(GetNumMates(pawn.def));
+            nutritionInGestation *= numAdults;
+            var (value, explain) = MeatPerConsumptionRaw(pawn, false, nutritionInGestation);
+            explain = $"The nutrition from meat if the animal is raised from birth till adulthood, compared to the food eaten by it during growth and by {numAdults:F1} parents during gestation.\n\n"
+                + explain
+                + $"\nConsumption: { nutritionInGestation:F2} nutrition per offspring during gestation ({numAdults:F1} parents)";
+            return (value, explain);
+        }
+
+        public static (string value, string explain) EggPerConsumption(ThingDef pawnDef, CompProperties_EggLayer eggLayer)
+        {
+            // Ignore father
+            double nutritionInGestation = BaseHuntryPerDay(pawnDef) * eggLayer.eggLayIntervalDays / eggLayer.eggCountRange.Average;
+            double nutritionPerEgg = (eggLayer.eggUnfertilizedDef ?? eggLayer.eggFertilizedDef).ingestible.CachedNutrition;
+
+            var value = $"{nutritionPerEgg / nutritionInGestation * 100:F1}%";
+            StringBuilder sb = new();
+            sb
+                .AppendLine("The nutrition from eggs, compared to the food eaten during egg laying intervel.\n")
+                .AppendLine($"Nutrition efficiency: {nutritionPerEgg:F2} / {nutritionInGestation:F2} = {value}")
+                .AppendLine()
+                .AppendLine($"Egg: {nutritionPerEgg:F2} nutrition")
+                .AppendLine($"Consumption: {nutritionInGestation:F2} nutrition per egg during gestation");
+            return (value, sb.ToString().TrimEndNewlines());
+        }
+
+        public static (string value, string explain) MilkPerConsumption(ThingDef pawnDef, CompProperties_Milkable milkable)
+        {
+            // Ignore father
+            double nutritionInMilkInterval = BaseHuntryPerDay(pawnDef) * milkable.milkIntervalDays;
+            double nutritionFromMilk = milkable.milkDef.ingestible.CachedNutrition * milkable.milkAmount;
+
+            var value = $"{nutritionFromMilk / nutritionInMilkInterval * 100:F1}%";
+            StringBuilder sb = new();
+            sb
+                .AppendLine("The nutrition from milk, compared to the food eaten during milk interval.\n")
+                .AppendLine($"Nutrition efficiency: {nutritionFromMilk:F2} / {nutritionInMilkInterval:F2} = {value}")
+                .AppendLine()
+                .AppendLine($"Milk: {nutritionFromMilk:F2} nutrition")
+                .AppendLine($"Consumption: {nutritionInMilkInterval:F2} nutrition during milk interval");
+            return (value, sb.ToString().TrimEndNewlines());
+        }
+
+        public static (string value, string explain) BabyPerConsumption(ThingDef pawnDef)
+        {
+            double gestationDays = AnimalProductionUtility.GestationDaysLitter(pawnDef);
+            var litterSize = AnimalProductionUtility.OffspringRange(pawnDef);
+            double nutritionInGestation = BaseHuntryPerDay(pawnDef) * gestationDays / litterSize.Average;
+            double numAdults = NumAdultsPerGestation(GetNumMates(pawnDef));
+            nutritionInGestation *= numAdults;
+            double meat = GetMeat(pawnDef, pawnDef.race.lifeStageAges[0].def);
+            double nutritionFromMeat = meat * pawnDef.race.meatDef.GetStatValueAbstract(StatDefOf.Nutrition);
+
+            var value = $"{nutritionFromMeat / nutritionInGestation * 100:F1}%";
+            StringBuilder sb = new();
+            sb
+                .AppendLine($"The nutrition from meat if we butcher offsprings straight after birth, compared to the food eaten by {numAdults:F1} parents during gestation.\n")
+                .AppendLine($"Nutrition efficiency: {nutritionFromMeat:F2} / {nutritionInGestation:F2} = {value}")
+                .AppendLine()
+                .AppendLine($"Baby meat: {nutritionFromMeat:F2} nutrition")
+                .AppendLine($"Consumption: {nutritionInGestation:F2} nutrition per offspring during gestation ({numAdults:F1} parents)");
+            return (value, sb.ToString().TrimEndNewlines());
+        }
+
+        public static double GetNumMates(ThingDef pawnDef)
+        {
+            double gestationDays = AnimalProductionUtility.GestationDaysLitter(pawnDef);
+            double chanceToPregnantPerDay = GenDate.HoursPerDay * HoursAwakenPerDay / pawnDef.race.mateMtbHours;
+            if (pawnDef.GetCompProperties<CompProperties_EggLayer>() is null)
+            {
+                chanceToPregnantPerDay *= 0.5f;
+            }
+            return gestationDays * chanceToPregnantPerDay;
+        }
+
+        public static (string value, string explain) MateInfo(ThingDef pawnDef)
+        {
+            double numMates = GetNumMates(pawnDef);
+            var value = $"{numMates:F1}";
+            StringBuilder sb = new();
+            sb
+                .AppendLine($"The max number of females one male can impregnate. In practice this value would be lower.\n")
+                .AppendLine($"Each male can satisfy: {value} female");
+            return (value, sb.ToString().TrimEndNewlines());
+        }
+    }
 }
