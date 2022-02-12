@@ -33,6 +33,7 @@ namespace CF_GrazingInfo
             Listing_Standard listingStandard = new();
             listingStandard.Begin(inRect);
             listingStandard.CheckboxLabeled("Eat Dandelion Only If Mature", ref Settings.EatDandelionOnlyIfMature, "Player tamed animals eat Dandelion only if it is mature");
+            listingStandard.CheckboxLabeled("Floating text when grazing", ref Settings.FloatingTextWhenGrazing, "Show nutrition consumed & food saturation increased as a floating text when animals graze");
             listingStandard.End();
             base.DoSettingsWindowContents(inRect);
         }
@@ -47,10 +48,12 @@ namespace CF_GrazingInfo
     public class Settings: ModSettings
     {
         public bool EatDandelionOnlyIfMature;
+        public bool FloatingTextWhenGrazing;
 
         public override void ExposeData()
         {
             Scribe_Values.Look(ref EatDandelionOnlyIfMature, "EatDandelionOnlyIfMature", false);
+            Scribe_Values.Look(ref FloatingTextWhenGrazing, "FloatingTextWhenGrazing", true);
             base.ExposeData();
         }
     }
@@ -271,6 +274,21 @@ namespace CF_GrazingInfo
     }
 
 
+    [HarmonyPatch(typeof(Thing))]
+    [HarmonyPatch(nameof(Thing.Ingested))]
+    public static class PatchThingIngested
+    {
+        public static void Postfix(ref float __result, Thing __instance, Pawn ingester)
+        {
+            if (Patcher.Settings.FloatingTextWhenGrazing && __instance is Plant && __result > 0)
+            {
+                float foodLevel = ingester.needs.food.CurLevel;
+                float maxLevel = ingester.needs.food.MaxLevel;
+                // No need to show max level if it is full.
+                var maxLeveltext = (maxLevel - foodLevel) < 0.001 ? "" : $" ({maxLevel:F2})";
+                MoteMaker.ThrowText(ingester.DrawPos, ingester.Map, $"Graze {__instance.Label} {__result:F2}: {foodLevel:F2} => {foodLevel + __result:F2}{maxLeveltext}", 4);
+            }
+        }
     }
 
 }
