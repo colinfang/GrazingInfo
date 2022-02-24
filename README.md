@@ -12,6 +12,7 @@ Frustrated with animal starving? This is a QoL mod that displays summary of graz
     - For player tamed animals only. Wild animals are not affected.
 - It provides an option to show nutrition consumed & food saturation increased as a floating text when animals graze.
 - It adds many extra stats on animal info card, e.g. best male to female ratio, nutrition efficiency to farm animals for meat, egg, milk.
+- I would expect it to be compatible with most mods. New animals from other mods should also benefit from this change.
 
 ## Remarks
 
