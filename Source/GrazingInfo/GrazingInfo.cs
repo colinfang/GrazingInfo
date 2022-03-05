@@ -88,35 +88,32 @@ namespace CF_GrazingInfo
 
         public static void Tally(IntVec3 c, Map map)
         {
-            foreach (Thing thing in c.GetThingList(map))
+            foreach (var plant in c.GetThingList(map).OfType<Plant>())
             {
-                if (thing is Plant plant)
+                if (!edibleCache.TryGetValue(plant.def, out bool edible))
                 {
-                    if (!edibleCache.TryGetValue(plant.def, out bool edible))
-                    {
-                        edible = MapPlantGrowthRateCalculator.IsEdibleByPastureAnimals(plant.def);
-                        edibleCache.Add(thing.def, edible);
-                    }
-                    if (!edible)
-                    {
-                        continue;
-                    }
-                    float nutritionAvailable = plant.Growth * plant.GetStatValue(StatDefOf.Nutrition);
-                    float nutritionIngestible = plant.IngestibleNow ? nutritionAvailable : 0;
+                    edible = MapPlantGrowthRateCalculator.IsEdibleByPastureAnimals(plant.def);
+                    edibleCache.Add(thing.def, edible);
+                }
+                if (!edible)
+                {
+                    continue;
+                }
+                float nutritionAvailable = plant.Growth * plant.GetStatValue(StatDefOf.Nutrition);
+                float nutritionIngestible = plant.IngestibleNow ? nutritionAvailable : 0;
 
-                    TotalNutritionGrown += nutritionAvailable;
-                    TotalNutritionIngestible += nutritionIngestible;
+                TotalNutritionGrown += nutritionAvailable;
+                TotalNutritionIngestible += nutritionIngestible;
 
-                    if (Summary.TryGetValue(plant.def, out var info))
-                    {
-                        info.NutritionGrown += nutritionAvailable;
-                        info.NutritionIngestible += nutritionIngestible;
-                        info.Count += 1;
-                    }
-                    else
-                    {
-                        Summary.Add(plant.def, new Info { NutritionGrown = nutritionAvailable, NutritionIngestible = nutritionIngestible, Count = 1 });
-                    }
+                if (Summary.TryGetValue(plant.def, out var info))
+                {
+                    info.NutritionGrown += nutritionAvailable;
+                    info.NutritionIngestible += nutritionIngestible;
+                    info.Count += 1;
+                }
+                else
+                {
+                    Summary.Add(plant.def, new Info { NutritionGrown = nutritionAvailable, NutritionIngestible = nutritionIngestible, Count = 1 });
                 }
             }
         }
