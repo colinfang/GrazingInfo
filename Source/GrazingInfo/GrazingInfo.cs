@@ -48,14 +48,14 @@ namespace CF_GrazingInfo
 
     public class Settings : ModSettings
     {
-        public bool EatDandelionOnlyIfMature;
-        public bool FloatingTextWhenGrazing;
-        public bool AnimalProductivityInfo;
+        public bool EatDandelionOnlyIfMature = false;
+        public bool FloatingTextWhenGrazing = false;
+        public bool AnimalProductivityInfo = true;
 
         public override void ExposeData()
         {
             Scribe_Values.Look(ref EatDandelionOnlyIfMature, "EatDandelionOnlyIfMature", false);
-            Scribe_Values.Look(ref FloatingTextWhenGrazing, "FloatingTextWhenGrazing", true);
+            Scribe_Values.Look(ref FloatingTextWhenGrazing, "FloatingTextWhenGrazing", false);
             Scribe_Values.Look(ref AnimalProductivityInfo, "AnimalProductivityInfo", true);
             base.ExposeData();
         }
@@ -93,7 +93,7 @@ namespace CF_GrazingInfo
                 if (!edibleCache.TryGetValue(plant.def, out bool edible))
                 {
                     edible = MapPlantGrowthRateCalculator.IsEdibleByPastureAnimals(plant.def);
-                    edibleCache.Add(thing.def, edible);
+                    edibleCache.Add(plant.def, edible);
                 }
                 if (!edible)
                 {
