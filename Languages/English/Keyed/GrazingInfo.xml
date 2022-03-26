@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <LanguageData>
 
-<GrazingInfo_Total>Grazing Nutrition</GrazingInfo_Total>
+<GrazingInfo_Total>Grazing nutrition</GrazingInfo_Total>
 <GrazingInfo_TotalDescription>The overall currently ingestible (total) grazing nutrition in the pen.</GrazingInfo_TotalDescription>
 <GrazingInfo_EmptyDays>Days to grazing exhaustion</GrazingInfo_EmptyDays>
 <GrazingInfo_EmptyDaysDescription>An estimate how soon all the plants are eaten. [currentGrazingNutrition / (consumption - growth)]</GrazingInfo_EmptyDaysDescription>

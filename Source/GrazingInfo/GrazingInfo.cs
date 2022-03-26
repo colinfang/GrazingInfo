@@ -32,7 +32,7 @@ namespace CF_GrazingInfo
         {
             Listing_Standard listingStandard = new();
             listingStandard.Begin(inRect);
-            listingStandard.CheckboxLabeled("Eat Dandelion Only If Mature", ref Settings.EatDandelionOnlyIfMature, "Player tamed animals eat Dandelion only if it is mature");
+            listingStandard.CheckboxLabeled("Eat Dandelion Only If Mature", ref Settings.EatDandelionOnlyIfMature, "Player tamed animals would not eat immature Dandelion");
             listingStandard.CheckboxLabeled("Floating Text When Grazing", ref Settings.FloatingTextWhenGrazing, "Show nutrition consumed & food saturation increased as a floating text when animals graze");
             listingStandard.CheckboxLabeled("Animal Productivity Info", ref Settings.AnimalProductivityInfo, "Show more stats on animal info card e.g. best male to female ratio, nutrition efficiency");
             listingStandard.End();
