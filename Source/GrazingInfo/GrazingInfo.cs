@@ -203,7 +203,7 @@ namespace CF_GrazingInfo
     [HarmonyPatch("DrawTopPane")]
     public class PatchITab_PenFoodDrawTopPane
     {
-        public static MethodInfo M_DrawStatLine = typeof(ITab_PenFood).GetMethod("DrawStatLine", BindingFlags.NonPublic | BindingFlags.Instance);
+        public static readonly MethodInfo M_DrawStatLine = typeof(ITab_PenFood).GetMethod("DrawStatLine", BindingFlags.NonPublic | BindingFlags.Instance);
 
         public static void Postfix(ref float curY, float width, ITab_PenFood __instance, PenFoodCalculator calc)
         {
